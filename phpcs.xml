@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<ruleset xmlns="web">
+    <description>
+        Mes regles de formatage
+    </description>
+    <arg name="colors"/>
+    <arg value="p"/>
+    <file>
+        app
+    </file>
+    <rule ref="PSR2"></rule>
+</ruleset>
