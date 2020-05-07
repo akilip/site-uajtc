@@ -3,11 +3,18 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\Mail\JobActivationCompte;
 use App\Providers\RouteServiceProvider;
 use App\User;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Auth\RegistersUsers;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Routing\Redirector;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use MercurySeries\Flashy\Flashy;
 
 class RegisterController extends Controller
 {
@@ -38,8 +45,43 @@ class RegisterController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('guest');
+        //$this->middleware('guest');
     }
+
+    /**
+     * @param Request $request
+     * @return RedirectResponse|Redirector
+     */
+    public function register(Request $request)
+    {
+        $this->validator($request->all())->validate();
+        event(new Registered($user = $this->create($request->all())));
+        $this->dispatch(new JobActivationCompte($user));
+        Flashy::primary('Compte Creer; En attente d\'activation');
+        return redirect('users');
+    }
+
+
+    /**
+     * @param $id
+     * @param $token
+     * @return Application|RedirectResponse|Redirector
+     */
+    public function confirm($id, $token)
+    {
+        $user=User::where('id', $id)->where('confirmation_token', $token)->first();
+
+        if ($user) {
+            $user->update(['confirmation_token'=>null]);
+            $this->guard()->login($user);
+            Flashy::primary('Votre compte est activer');
+            return redirect('profile');
+        } else {
+            Flashy::primary('Ce lien semble invalide');
+            return redirect('home');
+        }
+    }
+
 
     /**
      * Get a validator for an incoming registration request.
@@ -50,7 +92,9 @@ class RegisterController extends Controller
     protected function validator(array $data)
     {
         return Validator::make($data, [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'min:3'],
+            'surname' => ['required', 'string', 'min:3'],
+            'username' => ['required', 'string', 'min:4','unique:users'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
@@ -66,8 +110,11 @@ class RegisterController extends Controller
     {
         return User::create([
             'name' => $data['name'],
+            'surname' => $data['surname'],
+            'username' => $data['username'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
+            'confirmation_token' => str_replace('/', '', bcrypt(str_random(20))),
         ]);
     }
 }
